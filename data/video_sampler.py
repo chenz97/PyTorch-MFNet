@@ -22,8 +22,16 @@ class RandomSampling(object):
         # sampling
         speed_min = self.speed[0]
         speed_max = min(self.speed[1], (range_max-1)/((self.num-1)*interval))
-        if speed_max < speed_min:
-            return [self.rng.choice(range(0, range_max))] * self.num
+
+        # if speed_max < speed_min:
+        #     return [self.rng.choice(range(0, range_max))] * self.num
+        while speed_max < speed_min:
+            interval -= 1
+            if interval < 1:
+                return [self.rng.choice(range(0, range_max))] * self.num
+            speed_max = min(self.speed[1], (range_max - 1) / ((self.num - 1) * interval))
+
+
         random_interval = self.rng.uniform(speed_min, speed_max) * interval
         frame_range = (self.num-1) * random_interval
         clip_start = self.rng.uniform(0, (range_max-1) - frame_range)

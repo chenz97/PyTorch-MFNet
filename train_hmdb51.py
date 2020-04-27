@@ -61,7 +61,7 @@ parser.add_argument('--lr-steps', type=list, default=[int(1e4*x) for x in [5, 10
                     help="number of samples to pass before changing learning rate") # 1e6 million
 parser.add_argument('--lr-factor', type=float, default=0.1,
                     help="reduce the learning with factor")
-parser.add_argument('--save-frequency', type=float, default=10,
+parser.add_argument('--save-frequency', type=float, default=5,
                     help="save once after N epochs")
 parser.add_argument('--end-epoch', type=int, default=100,
                     help="maxmium number of training epoch")

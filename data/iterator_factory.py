@@ -26,7 +26,9 @@ def get_hmdb51(data_root='./dataset/HMDB51',
                                            interval=train_interval,
                                            speed=[1.0, 1.0],
                                            seed=(seed+0))
+    # NOTE: equivalent to Dataset, returns a sequence of frames
     train = VideoIter(video_prefix=os.path.join(data_root, 'raw', 'data-x360'),
+                      frame_prefix=os.path.join(data_root, 'raw', 'frames'),
                       txt_list=os.path.join(data_root, 'raw', 'list_cvt', 'hmdb51_split1_train.txt'),
                       sampler=train_sampler,
                       force_color=True,
@@ -50,6 +52,7 @@ def get_hmdb51(data_root='./dataset/HMDB51',
                                                fix_cursor=True,
                                                shuffle=True)
     val   = VideoIter(video_prefix=os.path.join(data_root, 'raw', 'data-x360'),
+                      frame_prefix=os.path.join(data_root, 'raw', 'frames'),
                       txt_list=os.path.join(data_root, 'raw', 'list_cvt', 'hmdb51_split1_test.txt'),
                       sampler=val_sampler,
                       force_color=True,
