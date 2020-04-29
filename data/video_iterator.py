@@ -143,6 +143,7 @@ class VideoIter(data.Dataset):
                  frame_prefix,
                  txt_list,
                  sampler,
+                 load_from_frames=True,
                  video_transform=None,
                  name="<NO_NAME>",
                  force_color=True,
@@ -157,6 +158,7 @@ class VideoIter(data.Dataset):
         self.force_color = force_color
         self.video_prefix = video_prefix
         self.frame_prefix = frame_prefix
+        self.load_from_frames = load_from_frames
         self.video_transform = video_transform
         self.return_item_subpath = return_item_subpath
         self.backup_item = None
@@ -200,55 +202,56 @@ class VideoIter(data.Dataset):
         # get current video info
         v_id, label, vid_subpath, frame_count = self.video_list[index]
 
-        # video_path = os.path.join(self.video_prefix, vid_subpath)
-        #
-        # faulty_frames = []
-        # successfule_trial = False
-        #
-        # try:
-        #     with Video(vid_path=video_path) as video:
-        #         if frame_count < 0:
-        #             frame_count = video.count_frames(check_validity=False)
-        #         for i_trial in range(20):
-        #             # dynamic sampling
-        #             sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=v_id, prev_failed=(i_trial>0))
-        #             if set(list(sampled_idxs)).intersection(faulty_frames):
-        #                 continue
-        #             prev_sampled_idxs = list(sampled_idxs)
-        #             # extracting frames
-        #             sampled_frames = video.extract_frames(idxs=sampled_idxs, force_color=self.force_color)
-        #             if sampled_frames is None:
-        #                 faulty_frames.append(video.faulty_frame)
-        #             else:
-        #                 successfule_trial = True
-        #                 break
-        # except IOError as e:
-        #     logging.warning(">> I/O error({0}): {1}".format(e.errno, e.strerror))
-        #
-        # if not successfule_trial:
-        #     assert (self.backup_item is not None), \
-        #         "VideoIter:: >> frame {} is error & backup is inavailable. [{}]'".format(faulty_frames, video_path)
-        #     logging.warning(">> frame {} is error, use backup item! [{}]".format(faulty_frames, video_path))
-        #     with Video(vid_path=self.backup_item['video_path']) as video:
-        #         sampled_frames = video.extract_frames(idxs=self.backup_item['sampled_idxs'], force_color=self.force_color)
-        # elif self.tolerant_corrupted_video:
-        #     # assume the error rate less than 10%
-        #     if (self.backup_item is None) or (self.rng.rand() < 0.1):
-        #         self.backup_item = {'video_path': video_path, 'sampled_idxs': sampled_idxs}
+        if not self.load_from_frames:
+            video_path = os.path.join(self.video_prefix, vid_subpath)
 
-        frame_path = os.path.join(self.frame_prefix, vid_subpath[:-4])
-        frame_count = len(os.listdir(frame_path))
-        for i_trial in range(20):
-            # dynamic sampling
-            sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=v_id, prev_failed=(i_trial>0))
-            sampled_idxs = [idx+1 for idx in sampled_idxs]  # frame count starts from 00001.jpg
-            # prev_sampled_idxs = list(sampled_idxs)
-            # extracting frames
-            sampled_frames = self.extract_frames_img(frame_path, frame_count, sampled_idxs,
-                                                     force_color=self.force_color)
-            if sampled_frames is not None:
-                break
-        assert sampled_frames, 'failed for getting {}'.format(frame_path)
+            faulty_frames = []
+            successfule_trial = False
+
+            try:
+                with Video(vid_path=video_path) as video:
+                    if frame_count < 0:
+                        frame_count = video.count_frames(check_validity=False)
+                    for i_trial in range(20):
+                        # dynamic sampling
+                        sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=v_id, prev_failed=(i_trial>0))
+                        if set(list(sampled_idxs)).intersection(faulty_frames):
+                            continue
+                        prev_sampled_idxs = list(sampled_idxs)
+                        # extracting frames
+                        sampled_frames = video.extract_frames(idxs=sampled_idxs, force_color=self.force_color)
+                        if sampled_frames is None:
+                            faulty_frames.append(video.faulty_frame)
+                        else:
+                            successfule_trial = True
+                            break
+            except IOError as e:
+                logging.warning(">> I/O error({0}): {1}".format(e.errno, e.strerror))
+
+            if not successfule_trial:
+                assert (self.backup_item is not None), \
+                    "VideoIter:: >> frame {} is error & backup is inavailable. [{}]'".format(faulty_frames, video_path)
+                logging.warning(">> frame {} is error, use backup item! [{}]".format(faulty_frames, video_path))
+                with Video(vid_path=self.backup_item['video_path']) as video:
+                    sampled_frames = video.extract_frames(idxs=self.backup_item['sampled_idxs'], force_color=self.force_color)
+            elif self.tolerant_corrupted_video:
+                # assume the error rate less than 10%
+                if (self.backup_item is None) or (self.rng.rand() < 0.1):
+                    self.backup_item = {'video_path': video_path, 'sampled_idxs': sampled_idxs}
+        else:
+            frame_path = os.path.join(self.frame_prefix, vid_subpath[:-4])
+            frame_count = len(os.listdir(frame_path))
+            for i_trial in range(20):
+                # dynamic sampling
+                sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=v_id, prev_failed=(i_trial>0))
+                # sampled_idxs = [idx+1 for idx in sampled_idxs]  # frame count starts from 00001.jpg
+                # prev_sampled_idxs = list(sampled_idxs)
+                # extracting frames
+                sampled_frames = self.extract_frames_img(frame_path, frame_count, sampled_idxs,
+                                                         force_color=self.force_color)
+                if sampled_frames is not None:
+                    break
+            assert sampled_frames, 'failed for getting {}'.format(frame_path)
 
         clip_input = np.concatenate(sampled_frames, axis=2)
         # apply video augmentation
