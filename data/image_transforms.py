@@ -209,12 +209,14 @@ class RandomRGB(Transform):
         return augmented_data
 
 class RandomHLS(Transform):
-    def __init__(self, vars=[15, 35, 25]):
+    def __init__(self, vars=[15, 35, 25], t_channels=48):
         self.vars = vars
         self.rng = np.random.RandomState(0)
+        self.t_channels = t_channels
 
     def __call__(self, data):
-        h, w, c = data.shape
+        # h, w, c = data.shape
+        c = self.t_channels
         assert c%3 == 0, "input channel = %d, illegal"%c
 
         random_vars = [int(round(self.rng.uniform(-x, x))) for x in self.vars]
@@ -236,7 +238,7 @@ class RandomHLS(Transform):
             augmented_data[:,:,3*i_im:(3*i_im+3)] = \
                     cv2.cvtColor(augmented_data[:,:,3*i_im:(3*i_im+3)].astype(np.uint8), \
                         cv2.COLOR_HLS2RGB)
-
+        augmented_data[:, :, c:] = data[:, :, c:]
         return augmented_data
 
 

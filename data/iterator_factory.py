@@ -14,6 +14,8 @@ def get_hmdb51(data_root='./dataset/HMDB51',
                mean=[0.485, 0.456, 0.406],
                std=[0.229, 0.224, 0.225],
                seed=0,
+               load_from_frames=True,
+               use_flow=False,
                **kwargs):
     """ data iter for ucf-101
     """
@@ -26,23 +28,40 @@ def get_hmdb51(data_root='./dataset/HMDB51',
                                            interval=train_interval,
                                            speed=[1.0, 1.0],
                                            seed=(seed+0))
+    if use_flow:
+        train_transform = transforms.Compose([
+            transforms.RandomScale(make_square=True,
+                                   aspect_ratio=[0.8, 1. / 0.8],
+                                   slen=[224, 288]),
+            transforms.RandomCrop((224, 224)),  # insert a resize if needed
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomHLS(vars=[15, 35, 25], t_channels=48),
+            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=48),
+            normalize,
+            ],
+            aug_seed=(seed + 1))
+    else:
+        train_transform = transforms.Compose([
+            transforms.RandomScale(make_square=True,
+                                   aspect_ratio=[0.8, 1. / 0.8],
+                                   slen=[224, 288]),
+            transforms.RandomCrop((224, 224)),  # insert a resize if needed
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomHLS(vars=[15, 35, 25]),
+            transforms.ToTensor(),
+            normalize,
+            ],
+            aug_seed=(seed + 1))
     # NOTE: equivalent to Dataset, returns a sequence of frames
     train = VideoIter(video_prefix=os.path.join(data_root, 'raw', 'data-x360'),
                       frame_prefix=os.path.join(data_root, 'raw', 'frames'),
                       txt_list=os.path.join(data_root, 'raw', 'list_cvt', 'hmdb51_split1_train.txt'),
                       sampler=train_sampler,
+                      flow_prefix=os.path.join(data_root, 'raw', 'flow'),
+                      load_from_frames=load_from_frames,
+                      use_flow=use_flow,
                       force_color=True,
-                      video_transform=transforms.Compose([
-                                         transforms.RandomScale(make_square=True,
-                                                                aspect_ratio=[0.8, 1./0.8],
-                                                                slen=[224, 288]),
-                                         transforms.RandomCrop((224, 224)), # insert a resize if needed
-                                         transforms.RandomHorizontalFlip(),
-                                         transforms.RandomHLS(vars=[15, 35, 25]),
-                                         transforms.ToTensor(),
-                                         normalize,
-                                      ],
-                                      aug_seed=(seed+1)),
+                      video_transform=train_transform,
                       name='train',
                       shuffle_list_seed=(seed+2),
                       )
@@ -51,17 +70,29 @@ def get_hmdb51(data_root='./dataset/HMDB51',
                                                interval=val_interval,
                                                fix_cursor=True,
                                                shuffle=True)
+    if use_flow:
+        val_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop((224, 224)),
+            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=48),
+            normalize,
+        ])
+    else:
+        val_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop((224, 224)),
+            transforms.ToTensor(),
+            normalize,
+        ])
     val   = VideoIter(video_prefix=os.path.join(data_root, 'raw', 'data-x360'),
                       frame_prefix=os.path.join(data_root, 'raw', 'frames'),
                       txt_list=os.path.join(data_root, 'raw', 'list_cvt', 'hmdb51_split1_test.txt'),
                       sampler=val_sampler,
+                      flow_prefix=os.path.join(data_root, 'raw', 'flow'),
+                      load_from_frames=load_from_frames,
+                      use_flow=use_flow,
                       force_color=True,
-                      video_transform=transforms.Compose([
-                                         transforms.Resize((256, 256)),
-                                         transforms.CenterCrop((224, 224)),
-                                         transforms.ToTensor(),
-                                         normalize,
-                                      ]),
+                      video_transform=val_transform,
                       name='test',
                       )
 

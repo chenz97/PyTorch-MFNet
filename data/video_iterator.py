@@ -143,7 +143,9 @@ class VideoIter(data.Dataset):
                  frame_prefix,
                  txt_list,
                  sampler,
+                 flow_prefix=None,
                  load_from_frames=True,
+                 use_flow=False,
                  video_transform=None,
                  name="<NO_NAME>",
                  force_color=True,
@@ -158,7 +160,9 @@ class VideoIter(data.Dataset):
         self.force_color = force_color
         self.video_prefix = video_prefix
         self.frame_prefix = frame_prefix
+        self.flow_prefix = flow_prefix
         self.load_from_frames = load_from_frames
+        self.use_flow = use_flow
         self.video_transform = video_transform
         self.return_item_subpath = return_item_subpath
         self.backup_item = None
@@ -182,7 +186,7 @@ class VideoIter(data.Dataset):
 
         frames = []
         for idx in idxs:
-            assert (frame_count < 0) or (idx <= frame_count), \
+            assert (frame_count < 0) or (idx < frame_count), \
                 "idxs: {} > total valid frames({})".format(idxs, frame_count)
             fname = os.path.join(vid_path, '{:05d}.jpg'.format(idx))
             frame = cv2.imread(fname)
@@ -195,6 +199,36 @@ class VideoIter(data.Dataset):
                     frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
             else:
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(frame)
+        return frames
+
+    def extract_flow(self, vid_path_x, vid_path_y, frame_count, idxs, force_color=True):
+        if len(idxs) < 1:
+            return []
+        idxs = [idx+1 for idx in idxs]  # flow count starts from 00001.jpg
+        frames = []
+        for idx in idxs:
+            assert (frame_count < 0) or (idx <= frame_count), \
+                "idxs: {} > total valid frames({})".format(idxs, frame_count)
+            # frame000001.jpg
+            if idx == frame_count:
+                try:
+                    frames.append(frames[-1])
+                except:
+                    logging.warning('empty frame, idx is {}'.format(idx))
+                    break
+                continue
+            fnamex = os.path.join(vid_path_x, 'frame{:06d}.jpg'.format(idx))
+            fnamey = os.path.join(vid_path_y, 'frame{:06d}.jpg'.format(idx))
+
+            flow_x = cv2.imread(fnamex)
+            flow_y = cv2.imread(fnamey)
+            if flow_x is None or flow_y is None:
+                # self.faulty_frame = idx
+                return None
+            flow_x = flow_x[:, :, 0]
+            flow_y = flow_y[:, :, 0]
+            frame = np.stack((flow_x, flow_y), axis=2)  # (H, W, 2)
             frames.append(frame)
         return frames
 
@@ -240,7 +274,7 @@ class VideoIter(data.Dataset):
                     self.backup_item = {'video_path': video_path, 'sampled_idxs': sampled_idxs}
         else:
             frame_path = os.path.join(self.frame_prefix, vid_subpath[:-4])
-            frame_count = len(os.listdir(frame_path))
+            frame_count = len(os.listdir(frame_path)) - 1  # TODO: workaround, since the last frame is empty
             for i_trial in range(20):
                 # dynamic sampling
                 sampled_idxs = self.sampler.sampling(range_max=frame_count, v_id=v_id, prev_failed=(i_trial>0))
@@ -252,28 +286,55 @@ class VideoIter(data.Dataset):
                 if sampled_frames is not None:
                     break
             assert sampled_frames, 'failed for getting {}'.format(frame_path)
-
         clip_input = np.concatenate(sampled_frames, axis=2)
+
+        if self.use_flow:
+            cls, vid = vid_subpath[:-4].split('/')
+            vid_path_x = os.path.join(self.flow_prefix, cls+'x', vid)
+            vid_path_y = os.path.join(self.flow_prefix, cls+'y', vid)
+            sampled_flow = self.extract_flow(vid_path_x, vid_path_y, frame_count, sampled_idxs)
+            assert sampled_flow, 'failed getting flow for {}'.format(vid_path_x)
+            flow_input = np.concatenate(sampled_flow, axis=2)
+            clip_input = np.concatenate((clip_input, flow_input), axis=2)  # (H, W, 80)
+
         # apply video augmentation
         if self.video_transform is not None:
             clip_input = self.video_transform(clip_input)
-        return clip_input, label, vid_subpath
+        if self.use_flow:
+            flow_input = clip_input[3:]
+            clip_input = clip_input[:3]
+            return clip_input, flow_input, label, vid_subpath
+            # return clip_input, label, vid_subpath
+        else:
+            return clip_input, label, vid_subpath
 
 
     def __getitem__(self, index):
         succ = False
         while not succ:
             try:
-                clip_input, label, vid_subpath = self.getitem_from_raw_video(index)
+                if self.use_flow:
+                    clip_input, flow_input, label, vid_subpath = self.getitem_from_raw_video(index)
+                    # clip_input, label, vid_subpath = self.getitem_from_raw_video(index)
+                else:
+                    clip_input, label, vid_subpath = self.getitem_from_raw_video(index)
                 succ = True
             except Exception as e:
                 index = self.rng.choice(range(0, self.__len__()))
-                logging.warning("VideoIter:: ERROR!! (Force using another index:\n{})\n{}".format(index, e))
+                logging.warning("VideoIter:: ERROR!! (Force using another index:{})\n{}".format(index, e))
 
         if self.return_item_subpath:
-            return clip_input, label, vid_subpath
+            if self.use_flow:
+                return (clip_input, flow_input), label, vid_subpath
+                # return clip_input, label, vid_subpath
+            else:
+                return clip_input, label, vid_subpath
         else:
-            return clip_input, label
+            if self.use_flow:
+                return (clip_input, flow_input), label
+                # return clip_input, label
+            else:
+                return clip_input, label
 
 
     def __len__(self):

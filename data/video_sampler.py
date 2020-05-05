@@ -57,13 +57,19 @@ class SequentialSampling(object):
         # sampling clips
         if v_id not in self.memory:
             clips = list(range(0, range_max-(frame_range-1), frame_range))
-            if self.shuffle:
+            while not clips:
+                interval -= 1
+                if interval < 1:
+                    break
+                frame_range = (num - 1) * interval + 1
+                clips = list(range(0, range_max - (frame_range - 1), frame_range))
+            if self.shuffle:  # TODO: set to True
                 self.rng.shuffle(clips)
             self.memory[v_id] = [-1, clips]
         # pickup a clip
         cursor, clips = self.memory[v_id]
         if not clips:
-            return [self.rng.choice(range(0, range_max))] * num
+            return [self.rng.choice(range(0, range_max))] * num  #
         cursor = (cursor + 1) % len(clips)
         if prev_failed or not self.fix_cursor:
             self.memory[v_id][0] = cursor

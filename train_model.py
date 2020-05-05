@@ -5,6 +5,7 @@ import torch
 import torchvision
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+import torch.nn.functional as F
 
 from data import iterator_factory
 from train import metric
@@ -18,6 +19,7 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
                 lr_base=0.01, lr_factor=0.1, lr_steps=[400000, 800000],
                 end_epoch=1000, distributed=False, 
                 pretrained_3d=None, fine_tune=False,
+                load_from_frames=True, use_flow=False,
                 **kwargs):
 
     assert torch.cuda.is_available(), "Currently, we only support CUDA version"
@@ -33,10 +35,26 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
                                                    val_interval=val_frame_interval,
                                                    mean=input_conf['mean'],
                                                    std=input_conf['std'],
-                                                   seed=iter_seed)
+                                                   seed=iter_seed,
+                                                   load_from_frames=load_from_frames,
+                                                   use_flow=use_flow)
     # wapper (dynamic model)
+    if use_flow:
+        class LogNLLLoss(torch.nn.Module):
+            def __init__(self):
+                super(LogNLLLoss, self).__init__()
+                self.loss = torch.nn.NLLLoss()
+
+            def forward(self, output, target):
+                output = torch.log(output)
+                loss = self.loss(output, target)
+                return loss
+        # criterion = LogNLLLoss().cuda()
+        criterion = torch.nn.CrossEntropyLoss().cuda()
+    else:
+        criterion = torch.nn.CrossEntropyLoss().cuda()
     net = model(net=sym_net,
-                criterion=torch.nn.CrossEntropyLoss().cuda(),
+                criterion=criterion,
                 model_prefix=model_prefix,
                 step_callback_freq=50,
                 save_checkpoint_freq=save_frequency,
@@ -50,7 +68,8 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
     name_base_layers = []
     for name, param in net.net.named_parameters():
         if fine_tune:
-            if name.startswith('classifier'):
+            # if name.startswith('classifier'):
+            if 'classifier' in name:
                 param_new_layers.append(param)
             else:
                 param_base_layers.append(param)
@@ -81,7 +100,7 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
             assert os.path.exists(pretrained_3d), "cannot locate: `{}'".format(pretrained_3d)
             logging.info("Initializer:: loading model states from: `{}'".format(pretrained_3d))
             checkpoint = torch.load(pretrained_3d)
-            net.load_state(checkpoint['state_dict'], strict=False)
+            net.load_state(checkpoint['state_dict'], mode='ada')
         else:
             logging.info("Initializer:: skip loading model states from: `{}'"
                 + ", since it's going to be overwrited by the resumed model".format(pretrained_3d))

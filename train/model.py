@@ -5,11 +5,16 @@ import os
 import time
 import socket
 import logging
+from typing import List
 
 import torch
 
 from . import metric
 from . import callback
+
+def set_bn_eval(module):
+    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+        module.eval()
 
 """
 Static Model
@@ -29,9 +34,32 @@ class static_model(object):
         self.model_prefix = model_prefix
         self.criterion = criterion
 
-    def load_state(self, state_dict, strict=False):
-        if strict:
+    def load_state(self, state_dict, mode='strict'):
+        if mode == 'strict':
             self.net.load_state_dict(state_dict=state_dict)
+        elif mode == 'ada':
+            # customized partialy load function
+            net_state_keys = list(self.net.state_dict().keys())
+            for name, param in state_dict.items():
+                for p_name in net_state_keys:
+                    if name[7:] in p_name:  # remove 'module.'
+                        dst_param_shape = self.net.state_dict()[p_name].shape
+                        if param.shape == dst_param_shape:
+                            self.net.state_dict()[p_name].copy_(param)
+                        elif param.shape[0] == dst_param_shape[0]:
+                            # self.net.state_dict()[p_name].copy_(param[:, :dst_param_shape[1]])
+                            if dst_param_shape[1] > param.shape[1]:
+                                self.net.state_dict()[p_name][:, :param.shape[1]].copy_(param)
+                                param_s = torch.mean(param, dim=1, keepdim=True)
+                                self.net.state_dict()[p_name][:, param.shape[1]:].copy_(
+                                    param_s.expand(-1, dst_param_shape[1] - param.shape[1], -1, -1, -1))
+                            else:
+                                self.net.state_dict()[p_name].copy_(param[:, :dst_param_shape[1]])
+                        net_state_keys.remove(p_name)
+            # indicating missed keys
+            if net_state_keys:
+                logging.warning(">> Failed to load: {}".format(net_state_keys))
+                return False
         else:
             # customized partialy load function
             net_state_keys = list(self.net.state_dict().keys())
@@ -39,7 +67,8 @@ class static_model(object):
                 if name in self.net.state_dict().keys():
                     dst_param_shape = self.net.state_dict()[name].shape
                     if param.shape == dst_param_shape:
-                        self.net.state_dict()[name].copy_(param.view(dst_param_shape))
+                        # self.net.state_dict()[name].copy_(param.view(dst_param_shape))
+                        self.net.state_dict()[name].copy_(param)
                         net_state_keys.remove(name)
             # indicating missed keys
             if net_state_keys:
@@ -63,7 +92,7 @@ class static_model(object):
 
         checkpoint = torch.load(load_path)
 
-        all_params_matched = self.load_state(checkpoint['state_dict'], strict=False)
+        all_params_matched = self.load_state(checkpoint['state_dict'], mode='ada')
 
         if optimizer:
             if 'optimizer' in checkpoint.keys() and all_params_matched:
@@ -106,14 +135,21 @@ class static_model(object):
         """
         # data = data.float().cuda(async=True)
         # target = target.cuda(async=True)
-        data = data.float().cuda()
-        target = target.cuda()
-        if self.net.training:
-            input_var = torch.autograd.Variable(data, requires_grad=False)
-            target_var = torch.autograd.Variable(target, requires_grad=False)
+        if isinstance(data, List):
+            data = [var.float().cuda() for var in data]
+        elif isinstance(data, torch.Tensor):
+            data = data.float().cuda()
         else:
-            input_var = torch.autograd.Variable(data, volatile=True)
-            target_var = torch.autograd.Variable(target, volatile=True)
+            raise NotImplementedError
+        target = target.cuda()
+        # if self.net.training:
+        #     input_var = torch.autograd.Variable(data, requires_grad=False)
+        #     target_var = torch.autograd.Variable(target, requires_grad=False)
+        # else:
+        #     input_var = torch.autograd.Variable(data, volatile=True)
+        #     target_var = torch.autograd.Variable(target, volatile=True)
+        input_var = data
+        target_var = target
         if self.net.training:
             output = self.net(input_var)
         else:
@@ -235,6 +271,7 @@ class model(static_model):
             ###########
             metrics.reset()
             self.net.train()
+            # self.net.apply(set_bn_eval)  # freeze BN
             sum_sample_inst = 0
             sum_sample_elapse = 0.
             sum_update_elapse = 0
@@ -264,7 +301,8 @@ class model(static_model):
                 sum_sample_elapse += time.time() - batch_start_time
                 sum_update_elapse += time.time() - update_start_time
                 batch_start_time = time.time()
-                sum_sample_inst += data.shape[0]
+                # sum_sample_inst += data.shape[0]
+                sum_sample_inst += target.shape[0]
 
                 if (i_batch % self.step_callback_freq) == 0:
                     # retrive eval results and reset metic
@@ -313,7 +351,7 @@ class model(static_model):
                     sum_forward_elapse += time.time() - forward_start_time
                     sum_sample_elapse += time.time() - batch_start_time
                     batch_start_time = time.time()
-                    sum_sample_inst += data.shape[0]
+                    sum_sample_inst += target.shape[0]
 
                 # evaluation callbacks
                 self.callback_kwargs['sample_elapse'] = sum_sample_elapse / sum_sample_inst

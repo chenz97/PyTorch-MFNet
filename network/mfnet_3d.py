@@ -64,7 +64,7 @@ class MF_UNIT(nn.Module):
 
 class MFNET_3D(nn.Module):
 
-    def __init__(self, num_classes, pretrained=False, **kwargs):
+    def __init__(self, num_classes, in_channels=3, pretrained=False, **kwargs):
         super(MFNET_3D, self).__init__()
 
         groups = 16
@@ -76,7 +76,7 @@ class MFNET_3D(nn.Module):
         # conv1 - x224 (x16)
         conv1_num_out = 16
         self.conv1 = nn.Sequential(OrderedDict([
-                    ('conv', nn.Conv3d( 3, conv1_num_out, kernel_size=(3,5,5), padding=(1,2,2), stride=(1,2,2), bias=False)),
+                    ('conv', nn.Conv3d(in_channels, conv1_num_out, kernel_size=(3,5,5), padding=(1,2,2), stride=(1,2,2), bias=False)),
                     ('bn', nn.BatchNorm3d(conv1_num_out)),
                     ('relu', nn.ReLU(inplace=True))
                     ]))
@@ -176,6 +176,22 @@ class MFNET_3D(nn.Module):
         h = self.classifier(h)
 
         return h
+
+class MFNET_3D_Two_Stream(nn.Module):
+    def __init__(self, num_classes, pretrained=False, **kwargs):
+        super(MFNET_3D_Two_Stream, self).__init__()
+        self.rgb_stream = MFNET_3D(num_classes, in_channels=3, pretrained=pretrained, **kwargs)
+        self.flow_stream = MFNET_3D(num_classes, in_channels=2, pretrained=pretrained, **kwargs)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        frames, flow = x
+        pred1 = self.rgb_stream(frames)
+        # pred1 = self.softmax(pred1)
+        pred2 = self.flow_stream(flow)
+        # pred2 = self.softmax(pred2)
+        fused_pred = (pred1 + pred2) / 2
+        return fused_pred
 
 if __name__ == "__main__":
     import torch

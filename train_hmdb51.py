@@ -31,6 +31,7 @@ parser.add_argument('--model-dir', type=str, default="./exps/models",
                     help="set logging file.")
 parser.add_argument('--log-file', type=str, default="",
                     help="set logging file.")
+parser.add_argument('--load-from-frames', action='store_true')
 # device
 parser.add_argument('--gpus', type=str, default="0,1",
                     help="define gpu id")
@@ -38,6 +39,7 @@ parser.add_argument('--gpus', type=str, default="0,1",
 parser.add_argument('--network', type=str, default='MFNet_3D',
                     choices=['MFNet_3D'],
                     help="chose the base network")
+parser.add_argument('--use-flow', action='store_true')
 # initialization with priority (the next step will overwrite the previous step)
 # - step 1: random initialize
 # - step 2: load the 2D pretrained model if `pretrained_2d' is True
@@ -133,7 +135,7 @@ if __name__ == "__main__":
     dataset_cfg = dataset.get_config(name=args.dataset)
 
     # creat model with all parameters initialized
-    net, input_conf = get_symbol(name=args.network,
+    net, input_conf = get_symbol(name=args.network, use_flow=args.use_flow,
                      pretrained=args.pretrained_2d if args.resume_epoch < 0 else None,
                      print_net=True if args.distributed else False,
                      **dataset_cfg)
