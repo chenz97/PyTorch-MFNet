@@ -152,9 +152,11 @@ class MFNET_3D(nn.Module):
             load_method='inflation' # 'random', 'inflation'
             pretrained_model=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pretrained/MFNet2D_ImageNet1k-0000.pth')
             logging.info("Network:: graph initialized, loading pretrained model: `{}'".format(pretrained_model))
-            assert os.path.exists(pretrained_model), "cannot locate: `{}'".format(pretrained_model)
-            state_dict_2d = torch.load(pretrained_model)
-            initializer.init_3d_from_2d_dict(net=self, state_dict=state_dict_2d, method=load_method)
+            if os.path.exists(pretrained_model):
+                state_dict_2d = torch.load(pretrained_model)
+                initializer.init_3d_from_2d_dict(net=self, state_dict=state_dict_2d, method=load_method)
+            else:
+                logging.warning("cannot locate: `{}'".format(pretrained_model))
         else:
             logging.info("Network:: graph initialized, use random inilization!")
 
@@ -175,6 +177,23 @@ class MFNET_3D(nn.Module):
         h = h.view(h.shape[0], -1)
         h = self.classifier(h)
 
+        return h
+
+    def get_feature(self, x):
+        assert x.shape[2] == 16
+
+        h = self.conv1(x)  # x224 -> x112
+        h = self.maxpool(h)  # x112 ->  x56
+
+        h = self.conv2(h)  # x56 ->  x56
+        h = self.conv3(h)  # x56 ->  x28
+        h = self.conv4(h)  # x28 ->  x14
+        h = self.conv5(h)  # x14 ->   x7
+
+        h = self.tail(h)
+        h = self.globalpool(h)
+
+        h = h.view(h.shape[0], -1)
         return h
 
 class MFNET_3D_Two_Stream(nn.Module):

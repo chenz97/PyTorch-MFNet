@@ -69,7 +69,7 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
     for name, param in net.net.named_parameters():
         if fine_tune:
             # if name.startswith('classifier'):
-            if 'classifier' in name:
+            if 'classifier' in name or 'fc' in name:
                 param_new_layers.append(param)
             else:
                 param_base_layers.append(param)
@@ -97,10 +97,13 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
     # load params from pretrained 3d network
     if pretrained_3d:
         if resume_epoch < 0:
-            assert os.path.exists(pretrained_3d), "cannot locate: `{}'".format(pretrained_3d)
-            logging.info("Initializer:: loading model states from: `{}'".format(pretrained_3d))
-            checkpoint = torch.load(pretrained_3d)
-            net.load_state(checkpoint['state_dict'], mode='ada')
+            if os.path.exists(pretrained_3d):
+                # assert os.path.exists(pretrained_3d), "cannot locate: '{}'".format(pretrained_3d)
+                logging.info("Initializer:: loading model states from: `{}'".format(pretrained_3d))
+                checkpoint = torch.load(pretrained_3d)
+                net.load_state(checkpoint['state_dict'], mode='ada')
+            else:
+                logging.warning("cannot locate: '{}'".format(pretrained_3d))
         else:
             logging.info("Initializer:: skip loading model states from: `{}'"
                 + ", since it's going to be overwrited by the resumed model".format(pretrained_3d))

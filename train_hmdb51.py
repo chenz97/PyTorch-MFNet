@@ -19,7 +19,7 @@ parser.add_argument('--debug-mode', type=bool, default=True,
 # io
 parser.add_argument('--dataset', default='HMDB51', choices=['UCF101', 'HMDB51', 'Kinetics'],
                     help="path to dataset")
-parser.add_argument('--clip-length', default=16,
+parser.add_argument('--clip-length', type=int, default=16,
                     help="define the length of each input sample.")
 parser.add_argument('--train-frame-interval', type=int, default=2,
                     help="define the sampling interval between frames.")
@@ -37,15 +37,16 @@ parser.add_argument('--gpus', type=str, default="0,1",
                     help="define gpu id")
 # algorithm
 parser.add_argument('--network', type=str, default='MFNet_3D',
-                    choices=['MFNet_3D'],
+                    choices=['MFNet_3D', 'DynImgNet'],
                     help="chose the base network")
 parser.add_argument('--use-flow', action='store_true')
+parser.add_argument('--dyn-mode', type=str, default='dyn')
 # initialization with priority (the next step will overwrite the previous step)
 # - step 1: random initialize
 # - step 2: load the 2D pretrained model if `pretrained_2d' is True
 # - step 3: load the 3D pretrained model if `pretrained_3d' is defined
 # - step 4: resume if `resume_epoch' >= 0
-parser.add_argument('--pretrained_2d', type=bool, default=False,
+parser.add_argument('--pretrained_2d', type=str, default='./network/pretrained/resnet50-19c8e357.pth',
                     help="load default 2D pretrained model.")
 parser.add_argument('--pretrained_3d', type=str, 
                     default='./network/pretrained/MFNet3D_Kinetics-400_72.8.pth',
@@ -53,8 +54,11 @@ parser.add_argument('--pretrained_3d', type=str,
 parser.add_argument('--resume-epoch', type=int, default=-1,
                     help="resume train")
 # optimization
-parser.add_argument('--fine-tune', type=bool, default=True,
+parser.add_argument('--fine-tune', dest='fine_tune', action='store_true',
                     help="apply different learning rate for different layers")
+parser.add_argument('--no-fine-tune', dest='fine_tune', action='store_false',
+                    help="not apply different learning rate for different layers")
+parser.set_defaults(fine_tune=True)
 parser.add_argument('--batch-size', type=int, default=32,
                     help="batch size")
 parser.add_argument('--lr-base', type=float, default=0.005,
@@ -136,9 +140,10 @@ if __name__ == "__main__":
 
     # creat model with all parameters initialized
     net, input_conf = get_symbol(name=args.network, use_flow=args.use_flow,
-                     pretrained=args.pretrained_2d if args.resume_epoch < 0 else None,
-                     print_net=True if args.distributed else False,
-                     **dataset_cfg)
+                                 pretrained=args.pretrained_2d if args.resume_epoch < 0 else None,
+                                 print_net=True if args.distributed else False,
+                                 sample_duration=args.clip_length, dyn_mode=args.dyn_mode,
+                                 **dataset_cfg)
 
     # training
     kwargs = {}

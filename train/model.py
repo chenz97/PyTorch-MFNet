@@ -162,6 +162,20 @@ class static_model(object):
             loss = None
         return [output], [loss]
 
+    def get_feature(self, data):
+        if isinstance(data, List):
+            data = [var.float().cuda() for var in data]
+        elif isinstance(data, torch.Tensor):
+            data = data.float().cuda()
+        else:
+            raise NotImplementedError
+        if isinstance(self.net,torch.nn.DataParallel):  # TODO: only for eval, no need
+            model = self.net.module
+        with torch.no_grad():
+            input_var = torch.autograd.Variable(data)
+            feature = model.get_feature(input_var)
+        return feature
+
 
 """
 Dynamic model that is able to update itself

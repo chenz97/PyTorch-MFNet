@@ -35,8 +35,8 @@ def get_hmdb51(data_root='./dataset/HMDB51',
                                    slen=[224, 288]),
             transforms.RandomCrop((224, 224)),  # insert a resize if needed
             transforms.RandomHorizontalFlip(),
-            transforms.RandomHLS(vars=[15, 35, 25], t_channels=48),
-            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=48),
+            transforms.RandomHLS(vars=[15, 35, 25], t_channels=clip_length*3),
+            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=clip_length*3),
             normalize,
             ],
             aug_seed=(seed + 1))
@@ -47,7 +47,7 @@ def get_hmdb51(data_root='./dataset/HMDB51',
                                    slen=[224, 288]),
             transforms.RandomCrop((224, 224)),  # insert a resize if needed
             transforms.RandomHorizontalFlip(),
-            transforms.RandomHLS(vars=[15, 35, 25]),
+            transforms.RandomHLS(vars=[15, 35, 25], t_channels=clip_length*3),
             transforms.ToTensor(),
             normalize,
             ],
@@ -74,7 +74,7 @@ def get_hmdb51(data_root='./dataset/HMDB51',
         val_transform = transforms.Compose([
             transforms.Resize((256, 256)),
             transforms.CenterCrop((224, 224)),
-            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=48),
+            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=clip_length*3),
             normalize,
         ])
     else:

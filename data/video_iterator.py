@@ -320,8 +320,9 @@ class VideoIter(data.Dataset):
                     clip_input, label, vid_subpath = self.getitem_from_raw_video(index)
                 succ = True
             except Exception as e:
+                logging.warning("VideoIter:: ERROR!! (Failed for index:{})\n{}".format(index, e))
                 index = self.rng.choice(range(0, self.__len__()))
-                logging.warning("VideoIter:: ERROR!! (Force using another index:{})\n{}".format(index, e))
+                # logging.warning("VideoIter:: ERROR!! (Force using another index:{})\n{}".format(index, e))
 
         if self.return_item_subpath:
             if self.use_flow:
