@@ -1,3 +1,4 @@
+# python storage_feature.py --task-name exps/models/lr002_flow_real_fea_cat --load-epoch 60 --gpus 2  --use-flow --split test
 import os
 import logging
 import cv2
@@ -23,7 +24,7 @@ from data.video_iterator import VideoIter
 from network.symbol_builder import get_symbol
 
 import torchvision.models as models
-from torchsummary import summary
+# from torchsummary import summary
 
 parser = argparse.ArgumentParser(description="PyTorch Video Recognition Parser (Evaluation)")
 # debug
@@ -49,11 +50,14 @@ parser.add_argument('--gpus', type=int, default=1,
 parser.add_argument('--network', type=str, default='mfnet_3d',
                     choices=['mfnet_3d'],
                     help="chose the base network")
+parser.add_argument('--use-flow', action='store_true')
+parser.add_argument('--dyn-mode', type=str, default='dyn')
 # evaluation
 parser.add_argument('--load-epoch', type=int, default=60,
                     help="resume trained model")
 parser.add_argument('--batch-size', type=int, default=8,
                     help="batch size")
+parser.add_argument('--split', type=str, default='test', choices=['test', 'others'])
 
 ##video_resize & extract_frame
 ##dst_folder="./query/frames"
@@ -156,7 +160,7 @@ if __name__ == '__main__':
     # number_class=51
 
     # creat model
-    sym_net, input_config = get_symbol(name=args.network, **dataset_cfg)
+    sym_net, input_config = get_symbol(name=args.network, use_flow=args.use_flow, **dataset_cfg)
 
     # network
     if torch.cuda.is_available():
@@ -177,20 +181,29 @@ if __name__ == '__main__':
                                          interval=args.frame_interval,
                                          speed=[1.0, 1.0])
 
+    if args.use_flow:
+        val_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop((224, 224)),
+            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=args.clip_length*3),
+            normalize,
+        ])
+    else:
+        val_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop((224, 224)),
+            transforms.ToTensor(),
+            normalize,
+        ])
     val_loader = VideoIter(video_prefix=os.path.join(data_root, 'raw', 'data'),  # change this part accordingly
                            frame_prefix=os.path.join(data_root, 'raw', 'frames'),
-                           txt_list=os.path.join(data_root, 'raw', 'list_cvt', 'hmdb51_split1_others.txt'),
+                           txt_list=os.path.join(data_root, 'raw', 'list_cvt', 'hmdb51_split1_{}.txt'.format(args.split)),
                            # change this part accordingly
                            sampler=val_sampler,
                            force_color=True,
-                           video_transform=transforms.Compose([
-                               transforms.Resize((256, 256)),
-                               transforms.RandomCrop((224, 224)),
-                               # transforms.CenterCrop((224, 224)), # we did not use center crop in our paper
-                               # transforms.RandomHorizontalFlip(), # we did not use mirror in our paper
-                               transforms.ToTensor(),
-                               normalize,
-                           ]),
+                           use_flow=args.use_flow,
+                           flow_prefix=os.path.join(data_root, 'raw', 'flow'),
+                           video_transform=val_transform,
                            name='test',
                            return_item_subpath=True
                            )

@@ -1,3 +1,4 @@
+# python evaluate_video_hmdb51_split1.py --task-name ../exps/models/lr002_frame_cv2 --load-epoch 40 --gpus 2 --topN 50
 import sys
 
 sys.path.append("..")
@@ -11,6 +12,7 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 
+from sklearn import preprocessing
 import dataset
 from train.model import static_model
 from train import metric
@@ -43,13 +45,15 @@ parser.add_argument('--gpus', type=int, default=1,
 parser.add_argument('--network', type=str, default='mfnet_3d',
                     choices=['mfnet_3d'],
                     help="chose the base network")
+parser.add_argument('--use-flow', action='store_true')
+
 # evaluation
 parser.add_argument('--load-epoch', type=int, default=60,
                     help="resume trained model")
 parser.add_argument('--batch-size', type=int, default=8,
                     help="batch size")
-parser.add_argument('--topN', type=int, default=20,
-                    help="batch size")
+parser.add_argument('--topN', type=int, default=10,
+                    help="topN")
 
 
 def autofill(args):
@@ -77,16 +81,26 @@ def set_logger(log_file='', debug_mode=False):
 
 
 def get_feature_dict():
-    feature_dict = {}
+    # feature_dict={}
     feature_path = "./database/"
     dirs = os.listdir(feature_path)
+    Video_list = []
+    feature_list = []
     for f_dir in dirs:
         v_path = feature_path + f_dir
         f_names = os.listdir(v_path)
         for f_name in f_names:
             tmp_f = np.load(v_path + "/" + f_name)
-            feature_dict[v_path + "/" + f_name] = tmp_f
-    return feature_dict
+            tmp_f = tmp_f.reshape(1, -1)
+            # print(tmp_f[:3])
+            tmp_f = preprocessing.normalize(tmp_f)
+            # print(tmp_f[:3])
+            tmp_f = np.squeeze(tmp_f)
+            Video_list.append(v_path + "/" + f_name)
+            feature_list.append(tmp_f)
+            # feature_dict[v_path+"/"+f_name]=tmp_f
+    # print(feature_list[:2,:])
+    return Video_list, feature_list
 
 
 def take_key(elem):
@@ -94,15 +108,26 @@ def take_key(elem):
 
 
 def get_top_N(N, V_feature):
-    f_dict = get_feature_dict()
+    Video_list, feature_list = get_feature_dict()
+    all_feature = np.array(feature_list)
+
+    # print(all_feature.shape)
+    # print(all_feature[:2,:])
+    # print(V_feature.shape)
+    # print(len(all_feature[0]))
+    # print(V_feature)
     list_result = []
-    for (key, value) in f_dict.items():
-        dis = np.sqrt(np.sum(np.square(value - V_feature)))
-        list_result.append((dis, key))
+    dis_all = np.sum(np.square(all_feature - V_feature), axis=1)
+    for i in range(dis_all.shape[0]):
+        list_result.append((dis_all[i], Video_list[i]))
+    # for (key,value) in f_dict.items():
+    # value=preprocessing.normalize(value.reshape(1,-1))
+    # dis=np.sqrt(np.sum(np.square(value-V_feature)))
+    # list_result.append((dis,key))
     list_result.sort(key=take_key)
     lre = []
     for i in range(N):
-        print(list_result[i])
+        # print(list_result[i])
         lre.append(list_result[i][1])
     return lre
 
@@ -148,7 +173,7 @@ if __name__ == '__main__':
     dataset_cfg = dataset.get_config(name=args.dataset)
 
     # creat model
-    sym_net, input_config = get_symbol(name=args.network, **dataset_cfg)
+    sym_net, input_config = get_symbol(name=args.network, use_flow=args.use_flow, **dataset_cfg)
 
     # network
     if torch.cuda.is_available():
@@ -169,21 +194,29 @@ if __name__ == '__main__':
     val_sampler = sampler.RandomSampling(num=args.clip_length,
                                          interval=args.frame_interval,
                                          speed=[1.0, 1.0])
-
+    if args.use_flow:
+        val_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop((224, 224)),
+            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=args.clip_length*3),
+            normalize,
+        ])
+    else:
+        val_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop((224, 224)),
+            transforms.ToTensor(),
+            normalize,
+        ])
     val_loader = VideoIter(video_prefix=os.path.join(data_root, 'raw', 'data'),  # change this part accordingly
                            frame_prefix=os.path.join(data_root, 'raw', 'frames'),
                            txt_list=os.path.join(data_root, 'raw', 'list_cvt', 'hmdb51_split1_test.txt'),
                            # change this part accordingly
                            sampler=val_sampler,
                            force_color=True,
-                           video_transform=transforms.Compose([
-                               transforms.Resize((256, 256)),
-                               transforms.RandomCrop((224, 224)),
-                               # transforms.CenterCrop((224, 224)), # we did not use center crop in our paper
-                               # transforms.RandomHorizontalFlip(), # we did not use mirror in our paper
-                               transforms.ToTensor(),
-                               normalize,
-                           ]),
+                           use_flow=args.use_flow,
+                           flow_prefix=os.path.join(data_root, 'raw', 'flow'),
+                           video_transform=val_transform,
                            name='test',
                            return_item_subpath=True
                            )
@@ -212,14 +245,14 @@ if __name__ == '__main__':
             feature = feature.detach().cpu().numpy()
             for i in range(len(video_subpath)):
                 V_feature = feature[i]
-                topN_re = get_top_N(20, V_feature)
+                topN_re = get_top_N(args.topN, V_feature)
                 tmp_AP = cal_AP(topN_re, video_subpath[i])
                 print(video_subpath[i], str(tmp_AP))
-                print("              ")
-                print("              ")
+                # print("              ")
+                # print("              ")
                 list_Ap.append(tmp_AP)
         sum_AP = 0.0
-        for i in range(list_Ap):
+        for i in range(len(list_Ap)):
             sum_AP = sum_AP + list_Ap[i]
         MAP = sum_AP / len(list_Ap)
         print("MAP:", MAP)

@@ -5,6 +5,7 @@ import logging
 import os
 from collections import OrderedDict
 
+import torch
 import torch.nn as nn
 
 try:
@@ -64,8 +65,9 @@ class MF_UNIT(nn.Module):
 
 class MFNET_3D(nn.Module):
 
-    def __init__(self, num_classes, in_channels=3, pretrained=False, **kwargs):
+    def __init__(self, num_classes, in_channels=3, pretrained=False, get_fea=False, **kwargs):
         super(MFNET_3D, self).__init__()
+        self.get_fea = get_fea
 
         groups = 16
         k_sec  = {  2: 3, \
@@ -175,6 +177,8 @@ class MFNET_3D(nn.Module):
         h = self.globalpool(h)
 
         h = h.view(h.shape[0], -1)
+        if self.get_fea:
+            return h
         h = self.classifier(h)
 
         return h
@@ -199,18 +203,36 @@ class MFNET_3D(nn.Module):
 class MFNET_3D_Two_Stream(nn.Module):
     def __init__(self, num_classes, pretrained=False, **kwargs):
         super(MFNET_3D_Two_Stream, self).__init__()
-        self.rgb_stream = MFNET_3D(num_classes, in_channels=3, pretrained=pretrained, **kwargs)
-        self.flow_stream = MFNET_3D(num_classes, in_channels=2, pretrained=pretrained, **kwargs)
+        self.rgb_stream = MFNET_3D(num_classes, in_channels=3, pretrained=pretrained, get_fea=True, **kwargs)
+        self.flow_stream = MFNET_3D(num_classes, in_channels=2, pretrained=pretrained, get_fea=True, **kwargs)
         self.softmax = nn.Softmax(dim=1)
+        self.classifier = nn.Linear(1536, num_classes)
+        # self.classifier = nn.Linear(768, num_classes)
+
 
     def forward(self, x):
         frames, flow = x
-        pred1 = self.rgb_stream(frames)
-        # pred1 = self.softmax(pred1)
-        pred2 = self.flow_stream(flow)
-        # pred2 = self.softmax(pred2)
-        fused_pred = (pred1 + pred2) / 2
+        # pred1 = self.rgb_stream(frames)
+        # # pred1 = self.softmax(pred1)
+        # pred2 = self.flow_stream(flow)
+        # # pred2 = self.softmax(pred2)
+        # fused_pred = (pred1 + pred2) / 2
+
+        fea1 = self.rgb_stream(frames)
+        fea2 = self.flow_stream(flow)
+        fea = torch.cat((fea1, fea2), dim=1)
+        # fea = (fea1 + fea2) / 2
+        fused_pred = self.classifier(fea)
+
         return fused_pred
+
+    def get_feature(self, x):
+        frames, flow = x
+        fea1 = self.rgb_stream(frames)
+        fea2 = self.flow_stream(flow)
+        fea = torch.cat((fea1, fea2), dim=1)
+        # fea = (fea1 + fea2) / 2
+        return fea
 
 if __name__ == "__main__":
     import torch

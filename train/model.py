@@ -169,10 +169,11 @@ class static_model(object):
             data = data.float().cuda()
         else:
             raise NotImplementedError
-        if isinstance(self.net,torch.nn.DataParallel):  # TODO: only for eval, no need
+        if isinstance(self.net,torch.nn.DataParallel):  # TODO: only for eval, use model.module.get_feature instead
             model = self.net.module
         with torch.no_grad():
-            input_var = torch.autograd.Variable(data)
+            # input_var = torch.autograd.Variable(data)
+            input_var = data
             feature = model.get_feature(input_var)
         return feature
 
