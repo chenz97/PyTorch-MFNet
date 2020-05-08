@@ -7,6 +7,7 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 try:
     from . import initializer
@@ -222,8 +223,8 @@ class MFNET_3D_Two_Stream(nn.Module):
         fea2 = self.flow_stream(flow)
         fea = torch.cat((fea1, fea2), dim=1)
         # fea = (fea1 + fea2) / 2
+        # fea = F.normalize(fea, dim=1)
         fused_pred = self.classifier(fea)
-
         return fused_pred
 
     def get_feature(self, x):
@@ -232,6 +233,7 @@ class MFNET_3D_Two_Stream(nn.Module):
         fea2 = self.flow_stream(flow)
         fea = torch.cat((fea1, fea2), dim=1)
         # fea = (fea1 + fea2) / 2
+        # fea = F.normalize(fea, dim=1)
         return fea
 
 if __name__ == "__main__":

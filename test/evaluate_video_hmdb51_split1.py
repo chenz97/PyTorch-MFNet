@@ -107,15 +107,13 @@ def take_key(elem):
     return elem[0]
 
 
-def get_top_N(N, V_feature):
-    Video_list, feature_list = get_feature_dict()
-    all_feature = np.array(feature_list)
-
+def get_top_N(Video_list, all_feature, N, V_feature):
     # print(all_feature.shape)
     # print(all_feature[:2,:])
     # print(V_feature.shape)
     # print(len(all_feature[0]))
     # print(V_feature)
+    V_feature = preprocessing.normalize(V_feature.reshape(1, -1))
     list_result = []
     dis_all = np.sum(np.square(all_feature - V_feature), axis=1)
     for i in range(dis_all.shape[0]):
@@ -234,6 +232,10 @@ if __name__ == '__main__':
     duplication = 1
     softmax = torch.nn.Softmax(dim=1)
 
+    Video_list, feature_list = get_feature_dict()
+    all_feature = np.array(feature_list)
+
+
     total_round = 1  # change this part accordingly if you do not want an inf loop
     for i_round in range(total_round):
         list_Ap = []
@@ -245,7 +247,7 @@ if __name__ == '__main__':
             feature = feature.detach().cpu().numpy()
             for i in range(len(video_subpath)):
                 V_feature = feature[i]
-                topN_re = get_top_N(args.topN, V_feature)
+                topN_re = get_top_N(Video_list, all_feature, args.topN, V_feature)
                 tmp_AP = cal_AP(topN_re, video_subpath[i])
                 print(video_subpath[i], str(tmp_AP))
                 # print("              ")

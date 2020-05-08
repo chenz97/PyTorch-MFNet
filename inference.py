@@ -12,6 +12,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import numpy as np
 
+from sklearn import preprocessing
 from network.symbol_builder import get_symbol
 from train_model import train_model
 import dataset
@@ -137,33 +138,53 @@ def set_logger(log_file='', debug_mode=False):
 
 
 def get_feature_dict():
-    feature_dict = {}
-    feature_path = "test/database/"
+    # feature_dict={}
+    feature_path = "./test/database/"
     dirs = os.listdir(feature_path)
+    Video_list = []
+    feature_list = []
     for f_dir in dirs:
         v_path = feature_path + f_dir
         f_names = os.listdir(v_path)
         for f_name in f_names:
             tmp_f = np.load(v_path + "/" + f_name)
-            feature_dict[v_path + "/" + f_name] = tmp_f
-    return feature_dict
+            tmp_f = tmp_f.reshape(1, -1)
+            # print(tmp_f[:3])
+            tmp_f = preprocessing.normalize(tmp_f)
+            # print(tmp_f[:3])
+            tmp_f = np.squeeze(tmp_f)
+            Video_list.append(v_path + "/" + f_name)
+            feature_list.append(tmp_f)
+            # feature_dict[v_path+"/"+f_name]=tmp_f
+    # print(feature_list[:2,:])
+    return Video_list, feature_list
 
 
 def take_key(elem):
     return elem[0]
 
 
+Video_list, feature_list = get_feature_dict()
+
+
 def get_top_N(N, V_feature):
-    f_dict = get_feature_dict()
+    all_feature = np.array(feature_list)
+    V_feature = V_feature.reshape(1, -1)
+    V_feature = preprocessing.normalize(V_feature)
+    V_feature = np.squeeze(V_feature)
     list_result = []
-    for (key, value) in f_dict.items():
-        dis = np.sqrt(np.sum(np.square(value - V_feature)))
-        list_result.append((dis, key))
+    dis_all = np.sum(np.square(all_feature - V_feature), axis=1)
+    for i in range(dis_all.shape[0]):
+        list_result.append((dis_all[i], Video_list[i]))
+    # for (key,value) in f_dict.items():
+    # value=preprocessing.normalize(value.reshape(1,-1))
+    # dis=np.sqrt(np.sum(np.square(value-V_feature)))
+    # list_result.append((dis,key))
     list_result.sort(key=take_key)
     lre = []
     for i in range(N):
         print(list_result[i])
-        lre.append(list_result[i])
+        lre.append(list_result[i][1])
     return lre
 
 
@@ -247,11 +268,10 @@ if __name__ == '__main__':
     for i_round in range(total_round):
         i_batch = 0
         for data, target, video_subpath in eval_iter:
+            batch_start_time = time.time()
             feature = net.get_feature(data)
-            feature = feature.detach().cpu().numpy()
-            for i in range(len(video_subpath)):
-                V_feature = feature[i]
-                lre = get_top_N(20, V_feature)
+            feature = feature.detach().cpu().numpy()[0]
+            get_top_N(20, feature)
 
 
 
