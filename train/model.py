@@ -24,6 +24,7 @@ class static_model(object):
     def __init__(self,
                  net,
                  criterion=None,
+                 triplet_loss=False,
                  model_prefix='',
                  **kwargs):
         if kwargs:
@@ -33,6 +34,7 @@ class static_model(object):
         self.net = net
         self.model_prefix = model_prefix
         self.criterion = criterion
+        self.triplet_loss = triplet_loss
 
     def load_state(self, state_dict, mode='strict'):
         if mode == 'strict':
@@ -155,11 +157,34 @@ class static_model(object):
         else:
             with torch.no_grad():
                 output = self.net(input_var)
-        if hasattr(self, 'criterion') and self.criterion is not None \
-            and target is not None:
-            loss = self.criterion(output, target_var)
-        else:
-            loss = None
+
+        if self.triplet_loss:
+            n = output.size(0)
+            dist = torch.pow(output, 2).sum(dim=1, keepdim=True).expand(n, n)
+            dist = dist + dist.t()
+            dist.addmm_(1, -2, output, output.t())
+            dist = dist.clamp(min=1e-12).sqrt()
+            mask = target_var.expand(n, n).eq(target_var.expand(n, n).t())
+            dist_ap, dist_an = [], []
+            for i in range(n):
+                dist_ap.append(dist[i][mask[i]].max().unsqueeze(0))
+                dist_an.append(dist[i][mask[i] == 0].min().unsqueeze(0))
+            dist_ap = torch.cat(dist_ap)
+            dist_an = torch.cat(dist_an)
+            self.criterion = torch.nn.MarginRankingLoss().cuda()
+            # Compute ranking hinge loss
+            y = torch.ones_like(dist_an)
+            loss = self.criterion(dist_an, dist_ap, y)
+
+        # if hasattr(self, 'criterion') and self.criterion is not None \
+        #     and target is not None:
+        #     if self.triplet_loss:
+        #         y = torch.ones_like(dist_an)
+        #         loss = self.criterion(dist_an, dist_ap, y)
+        #     else:
+        #         loss = self.criterion(output, target_var)
+        # else:
+        #     loss = None
         return [output], [loss]
 
     def get_feature(self, data):
@@ -186,6 +211,7 @@ class model(static_model):
     def __init__(self,
                  net,
                  criterion,
+                 triplet_loss=False,
                  model_prefix='',
                  step_callback=None,
                  step_callback_freq=50,
@@ -199,7 +225,8 @@ class model(static_model):
             logging.warning("Unknown kwargs: {}".format(kwargs))
 
         super(model, self).__init__(net, criterion=criterion,
-                                         model_prefix=model_prefix)
+                                         model_prefix=model_prefix,
+                                         triplet_loss=triplet_loss)
 
         # load optional arguments
         # - callbacks

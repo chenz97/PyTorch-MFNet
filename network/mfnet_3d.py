@@ -180,6 +180,7 @@ class MFNET_3D(nn.Module):
         h = h.view(h.shape[0], -1)
         if self.get_fea:
             return h
+        # h = F.normalize(h, dim=1)
         h = self.classifier(h)
 
         return h
@@ -207,8 +208,8 @@ class MFNET_3D_Two_Stream(nn.Module):
         self.rgb_stream = MFNET_3D(num_classes, in_channels=3, pretrained=pretrained, get_fea=True, **kwargs)
         self.flow_stream = MFNET_3D(num_classes, in_channels=2, pretrained=pretrained, get_fea=True, **kwargs)
         self.softmax = nn.Softmax(dim=1)
-        self.classifier = nn.Linear(1536, num_classes)
-        # self.classifier = nn.Linear(768, num_classes)
+        # self.classifier = nn.Linear(1536, num_classes)
+        self.classifier = nn.Linear(768, num_classes)
 
 
     def forward(self, x):
@@ -221,8 +222,8 @@ class MFNET_3D_Two_Stream(nn.Module):
 
         fea1 = self.rgb_stream(frames)
         fea2 = self.flow_stream(flow)
-        fea = torch.cat((fea1, fea2), dim=1)
-        # fea = (fea1 + fea2) / 2
+        # fea = torch.cat((fea1, fea2), dim=1)
+        fea = (fea1 + fea2) / 2
         # fea = F.normalize(fea, dim=1)
         fused_pred = self.classifier(fea)
         return fused_pred
@@ -231,8 +232,8 @@ class MFNET_3D_Two_Stream(nn.Module):
         frames, flow = x
         fea1 = self.rgb_stream(frames)
         fea2 = self.flow_stream(flow)
-        fea = torch.cat((fea1, fea2), dim=1)
-        # fea = (fea1 + fea2) / 2
+        # fea = torch.cat((fea1, fea2), dim=1)
+        fea = (fea1 + fea2) / 2
         # fea = F.normalize(fea, dim=1)
         return fea
 

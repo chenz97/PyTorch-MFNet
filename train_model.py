@@ -19,7 +19,7 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
                 lr_base=0.01, lr_factor=0.1, lr_steps=[400000, 800000],
                 end_epoch=1000, distributed=False, 
                 pretrained_3d=None, fine_tune=False,
-                load_from_frames=True, use_flow=False,
+                load_from_frames=True, use_flow=False, triplet_loss=False,
                 **kwargs):
 
     assert torch.cuda.is_available(), "Currently, we only support CUDA version"
@@ -51,10 +51,14 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
                 return loss
         # criterion = LogNLLLoss().cuda()
         criterion = torch.nn.CrossEntropyLoss().cuda()
+    elif triplet_loss:
+        logging.info("Using triplet loss")
+        criterion=torch.nn.MarginRankingLoss().cuda()
     else:
         criterion = torch.nn.CrossEntropyLoss().cuda()
     net = model(net=sym_net,
                 criterion=criterion,
+                triplet_loss=triplet_loss,
                 model_prefix=model_prefix,
                 step_callback_freq=50,
                 save_checkpoint_freq=save_frequency,

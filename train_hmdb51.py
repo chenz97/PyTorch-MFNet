@@ -41,6 +41,7 @@ parser.add_argument('--network', type=str, default='MFNet_3D',
                     help="chose the base network")
 parser.add_argument('--use-flow', action='store_true')
 parser.add_argument('--dyn-mode', type=str, default='dyn')
+parser.add_argument('--triplet-loss', action='store_true')
 # initialization with priority (the next step will overwrite the previous step)
 # - step 1: random initialize
 # - step 2: load the 2D pretrained model if `pretrained_2d' is True
@@ -92,6 +93,7 @@ def autofill(args):
             args.log_file = ".{}_at-{}.log".format(args.task_name, socket.gethostname())
     # fixed
     args.model_prefix = os.path.join(args.model_dir, args.task_name)
+    args.get_fea = args.triplet_loss
     return args
 
 def set_logger(log_file='', debug_mode=False):
@@ -143,7 +145,7 @@ if __name__ == "__main__":
                                  pretrained=args.pretrained_2d if args.resume_epoch < 0 else None,
                                  print_net=True if args.distributed else False,
                                  sample_duration=args.clip_length, dyn_mode=args.dyn_mode,
-                                 **dataset_cfg)
+                                 get_fea=args.get_fea, **dataset_cfg)
 
     # training
     kwargs = {}
