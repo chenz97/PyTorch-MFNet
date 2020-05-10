@@ -19,7 +19,7 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
                 lr_base=0.01, lr_factor=0.1, lr_steps=[400000, 800000],
                 end_epoch=1000, distributed=False, 
                 pretrained_3d=None, fine_tune=False,
-                load_from_frames=True, use_flow=False, triplet_loss=False,
+                load_from_frames=False, use_flow=False, triplet_loss=False,
                 **kwargs):
 
     assert torch.cuda.is_available(), "Currently, we only support CUDA version"

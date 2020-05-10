@@ -56,6 +56,7 @@ if __name__ == "__main__":
 
     src_root = '../raw/data-x360'
     dst_root = '../raw/frames'
+    os.makedirs(dst_root, exist_ok=True)
     assert os.path.exists(dst_root), "cannot locate `{}'".format(dst_root)
 
     classname = [name for name in os.listdir(src_root) \

@@ -38,6 +38,7 @@ parser.add_argument('--model-dir', type=str, default="./",
                     help="set logging file.")
 parser.add_argument('--log-file', type=str, default="./eval-hmdb51-split1.log",
                     help="set logging file.")
+parser.add_argument('--load-from-frames', action='store_true')
 # device
 parser.add_argument('--gpus', type=int, default=1,
                     help="define gpu id")
@@ -213,6 +214,7 @@ if __name__ == '__main__':
                            txt_list=os.path.join(data_root, 'raw', 'list_cvt', 'hmdb51_split1_test.txt'),
                            # change this part accordingly
                            sampler=val_sampler,
+                           load_from_frames=args.load_from_frames,
                            force_color=True,
                            use_flow=args.use_flow,
                            flow_prefix=os.path.join(data_root, 'raw', 'flow'),

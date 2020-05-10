@@ -144,7 +144,7 @@ class VideoIter(data.Dataset):
                  txt_list,
                  sampler,
                  flow_prefix=None,
-                 load_from_frames=True,
+                 load_from_frames=False,
                  use_flow=False,
                  video_transform=None,
                  name="<NO_NAME>",
@@ -166,6 +166,8 @@ class VideoIter(data.Dataset):
         self.video_transform = video_transform
         self.return_item_subpath = return_item_subpath
         self.backup_item = None
+        if load_from_frames:
+            logging.info("load from frames")
         if (not check_video) and (tolerant_corrupted_video is None):
             logging.warning("VideoIter:: >> `check_video' is off, `tolerant_corrupted_video' is automatically activated.")
             tolerant_corrupted_video = True

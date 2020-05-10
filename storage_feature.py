@@ -43,6 +43,8 @@ parser.add_argument('--model-dir', type=str, default="./",
                     help="set logging file.")
 parser.add_argument('--log-file', type=str, default="./eval-hmdb51.log",
                     help="set logging file.")
+parser.add_argument('--load-from-frames', action='store_true')
+
 # device
 parser.add_argument('--gpus', type=int, default=1,
                     help="define gpu id")
@@ -201,6 +203,7 @@ if __name__ == '__main__':
                            # change this part accordingly
                            sampler=val_sampler,
                            force_color=True,
+                           load_from_frames=args.load_from_frames,
                            use_flow=args.use_flow,
                            flow_prefix=os.path.join(data_root, 'raw', 'flow'),
                            video_transform=val_transform,

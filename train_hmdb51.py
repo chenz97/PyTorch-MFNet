@@ -64,7 +64,7 @@ parser.add_argument('--no-fine-tune', dest='fine_tune', action='store_false',
 parser.set_defaults(fine_tune=True)
 parser.add_argument('--batch-size', type=int, default=32,
                     help="batch size")
-parser.add_argument('--lr-base', type=float, default=0.005,
+parser.add_argument('--lr-base', type=float, default=0.002,
                     help="learning rate")
 parser.add_argument('--lr-steps', type=list, default=[int(1e4*x) for x in [5, 10, 15]],
                     help="number of samples to pass before changing learning rate") # 1e6 million

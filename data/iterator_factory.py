@@ -14,7 +14,7 @@ def get_hmdb51(data_root='./dataset/HMDB51',
                mean=[0.485, 0.456, 0.406],
                std=[0.229, 0.224, 0.225],
                seed=0,
-               load_from_frames=True,
+               load_from_frames=False,
                use_flow=False,
                **kwargs):
     """ data iter for ucf-101

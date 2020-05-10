@@ -43,6 +43,8 @@ parser.add_argument('--model-dir', type=str, default="./",
                     help="set logging file.")
 parser.add_argument('--log-file', type=str, default="./eval-hmdb51.log",
                     help="set logging file.")
+parser.add_argument('--load-from-frames', action='store_true')
+
 # device
 parser.add_argument('--gpus', type=int, default=1,
                     help="define gpu id")
@@ -273,6 +275,7 @@ def search_result():
                            frame_prefix=os.path.join(data_root, 'frames'),
                            txt_list=os.path.join(data_root, 'list_cvt', 'search.txt'),
                            sampler=val_sampler,
+                           load_from_frames=args.load_from_frames,
                            force_color=True,
                            video_transform=transforms.Compose([
                                transforms.Resize((256, 256)),
