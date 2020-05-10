@@ -42,6 +42,8 @@ parser.add_argument('--network', type=str, default='MFNet_3D',
 parser.add_argument('--use-flow', action='store_true')
 parser.add_argument('--dyn-mode', type=str, default='dyn')
 parser.add_argument('--triplet-loss', action='store_true')
+parser.add_argument('--get-fea', action='store_true')
+
 # initialization with priority (the next step will overwrite the previous step)
 # - step 1: random initialize
 # - step 2: load the 2D pretrained model if `pretrained_2d' is True

@@ -128,9 +128,13 @@ def train_model(sym_net, model_prefix, dataset, input_conf,
                                         factor=lr_factor,
                                         step_counter=step_counter)
     # define evaluation metric
-    metrics = metric.MetricList(metric.Loss(name="loss-ce"),
-                                metric.Accuracy(name="top1", topk=1),
-                                metric.Accuracy(name="top5", topk=5),)
+    if triplet_loss:
+        metrics = metric.MetricList(metric.Loss(name="loss-triplet"),
+                                    metric.TripletAccuracy(name="acc"), )
+    else:
+        metrics = metric.MetricList(metric.Loss(name="loss-ce"),
+                                    metric.Accuracy(name="top1", topk=1),
+                                    metric.Accuracy(name="top5", topk=5), )
     # enable cudnn tune
     cudnn.benchmark = True
 

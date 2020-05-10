@@ -108,6 +108,17 @@ class Accuracy(EvalMetric):
             self.sum_metric += float(correct.view(-1).float().sum(0, keepdim=True).numpy())
             self.num_inst += label.shape[0]
 
+class TripletAccuracy(EvalMetric):
+    def __init__(self, name='accuracy'):
+        super(TripletAccuracy, self).__init__(name)
+
+    def update(self, preds, labels, losses):
+        margin = 0
+        preds = preds[0]
+        pred = preds[:, 1] - preds[:, 0] - margin
+        correct = (pred > 0).sum() * 1.0
+        self.sum_metric += float(correct.item())
+        self.num_inst += pred.size()[0]
 
 class Loss(EvalMetric):
     """Dummy metric for directly printing loss.

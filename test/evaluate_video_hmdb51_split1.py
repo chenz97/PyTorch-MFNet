@@ -155,6 +155,8 @@ def cal_AP(topN, real_label):
 
 if __name__ == '__main__':
 
+    b_time = time.time()
+
     # set args
     args = parser.parse_args()
     args = autofill(args)
@@ -196,7 +198,7 @@ if __name__ == '__main__':
         val_transform = transforms.Compose([
             transforms.Resize((256, 256)),
             transforms.CenterCrop((224, 224)),
-            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=args.clip_length*3),
+            transforms.ToTensorMixed(dim1=3, dim2=2, t_channel=args.clip_length * 3),
             normalize,
         ])
     else:
@@ -235,12 +237,18 @@ if __name__ == '__main__':
     Video_list, feature_list = get_feature_dict()
     all_feature = np.array(feature_list)
 
+    # load model data database
+    l_time = time.time()
 
     total_round = 1  # change this part accordingly if you do not want an inf loop
+
     for i_round in range(total_round):
+        dict_AP = {}
         list_Ap = []
         i_batch = 0
+        dict_q_r = {}
         for data, target, video_subpath in eval_iter:
+
             # print(video_subpath)
             batch_start_time = time.time()
             feature = net.get_feature(data)
@@ -248,7 +256,9 @@ if __name__ == '__main__':
             for i in range(len(video_subpath)):
                 V_feature = feature[i]
                 topN_re = get_top_N(Video_list, all_feature, args.topN, V_feature)
+                dict_q_r[video_subpath[i]] = topN_re
                 tmp_AP = cal_AP(topN_re, video_subpath[i])
+                dict_AP[video_subpath[i]] = tmp_AP
                 print(video_subpath[i], str(tmp_AP))
                 # print("              ")
                 # print("              ")
@@ -258,7 +268,8 @@ if __name__ == '__main__':
             sum_AP = sum_AP + list_Ap[i]
         MAP = sum_AP / len(list_Ap)
         print("MAP:", MAP)
-
-
-
-
+        json.dump(dict_q_r, open("q_r.json", "w"))
+        json.dump(dict_AP, open("q_AP.json", "w"))
+    e_time = time.time()
+    print("load_time:", l_time - b_time)
+    print("search_time:", e_time - l_time)

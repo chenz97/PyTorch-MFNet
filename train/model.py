@@ -8,6 +8,7 @@ import logging
 from typing import List
 
 import torch
+import torch.nn.functional as F
 
 from . import metric
 from . import callback
@@ -160,31 +161,45 @@ class static_model(object):
 
         if self.triplet_loss:
             n = output.size(0)
-            dist = torch.pow(output, 2).sum(dim=1, keepdim=True).expand(n, n)
+            output = F.normalize(output, p=2, dim=1)
+            # dist = torch.pow(output, 2).sum(dim=1, keepdim=True).expand(n, n)
+            dist = torch.pow(output, 2).sum(dim=1, keepdim=True)
             dist = dist + dist.t()
-            dist.addmm_(1, -2, output, output.t())
-            dist = dist.clamp(min=1e-12).sqrt()
-            mask = target_var.expand(n, n).eq(target_var.expand(n, n).t())
+            dist.addmm_(1, -2, output, output.t())  # (a-b)^2 = a^2 + b^2 - 2ab
+            # dist = dist.clamp(min=1e-12).sqrt()
+            dist = dist.clamp(min=1e-12)
+            # mask = target_var.expand(n, n).eq(target_var.expand(n, n).t())
+            mask = target_var.unsqueeze(1).eq(target_var.unsqueeze(0))
             dist_ap, dist_an = [], []
             for i in range(n):
-                dist_ap.append(dist[i][mask[i]].max().unsqueeze(0))
-                dist_an.append(dist[i][mask[i] == 0].min().unsqueeze(0))
+                try:
+                    dist_ap.append(dist[i][mask[i]].max().unsqueeze(0))
+                except:
+                    logging.warning('no positive samples')
+                    dist_ap.append(torch.tensor([0]))
+                try:
+                    dist_an.append(dist[i][mask[i] == 0].min().unsqueeze(0))
+                except:
+                    logging.warning('no negative samples')
+                    dist_ap.append(torch.tensor([0]))
             dist_ap = torch.cat(dist_ap)
             dist_an = torch.cat(dist_an)
-            self.criterion = torch.nn.MarginRankingLoss().cuda()
-            # Compute ranking hinge loss
-            y = torch.ones_like(dist_an)
-            loss = self.criterion(dist_an, dist_ap, y)
 
-        # if hasattr(self, 'criterion') and self.criterion is not None \
-        #     and target is not None:
-        #     if self.triplet_loss:
-        #         y = torch.ones_like(dist_an)
-        #         loss = self.criterion(dist_an, dist_ap, y)
-        #     else:
-        #         loss = self.criterion(output, target_var)
-        # else:
-        #     loss = None
+        # self.criterion = torch.nn.MarginRankingLoss().cuda()
+        # # Compute ranking hinge loss
+        # y = torch.ones_like(dist_an)
+        # loss = self.criterion(dist_an, dist_ap, y)
+
+        if hasattr(self, 'criterion') and self.criterion is not None \
+            and target is not None:
+            if self.triplet_loss:
+                y = torch.ones_like(dist_an)
+                loss = self.criterion(dist_an, dist_ap, y)
+                output = torch.stack((dist_ap, dist_an), dim=1)  # only for calculating metric
+            else:
+                loss = self.criterion(output, target_var)
+        else:
+            loss = None
         return [output], [loss]
 
     def get_feature(self, data):
@@ -313,6 +328,7 @@ class model(static_model):
             ###########
             metrics.reset()
             self.net.train()
+
             # self.net.apply(set_bn_eval)  # freeze BN
             sum_sample_inst = 0
             sum_sample_elapse = 0.

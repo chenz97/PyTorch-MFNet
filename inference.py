@@ -55,6 +55,8 @@ parser.add_argument('--load-epoch', type=int, default=60,
                     help="resume trained model")
 parser.add_argument('--batch-size', type=int, default=1,
                     help="batch size")
+parser.add_argument('--topN', type=int, default=200,
+                    help="topN")
 
 
 ##video_resize & extract_frame
@@ -164,14 +166,13 @@ def take_key(elem):
     return elem[0]
 
 
-Video_list, feature_list = get_feature_dict()
-
-
-def get_top_N(N, V_feature):
-    all_feature = np.array(feature_list)
-    V_feature = V_feature.reshape(1, -1)
-    V_feature = preprocessing.normalize(V_feature)
-    V_feature = np.squeeze(V_feature)
+def get_top_N(Video_list, all_feature, N, V_feature):
+    # print(all_feature.shape)
+    # print(all_feature[:2,:])
+    # print(V_feature.shape)
+    # print(len(all_feature[0]))
+    # print(V_feature)
+    V_feature = preprocessing.normalize(V_feature.reshape(1, -1))
     list_result = []
     dis_all = np.sum(np.square(all_feature - V_feature), axis=1)
     for i in range(dis_all.shape[0]):
@@ -184,14 +185,46 @@ def get_top_N(N, V_feature):
     lre = []
     for i in range(N):
         print(list_result[i])
-        lre.append(list_result[i][1])
+        lre.append(list_result[i][1].replace(".npy", ".mp4").replace("./database/", "../dataset/HMDB51/raw/data-mp4/"))
     return lre
 
 
-if __name__ == '__main__':
+def get_name_label():
+    dict_name_label = {}
+    data_path = "./dataset/HMDB51/raw/data/"
+    dir_names = os.listdir(data_path)
+    for dirname in dir_names:
+        filenames = os.listdir(data_path + dirname)
+        for v_name in filenames:
+            dict_name_label[v_name] = dirname
+    return dict_name_label
+
+
+def cal_AP(topN, true_label):
+    N = len(topN)
+    count_i = 0.0
+    number_i = 0.0
+    s_AP = 0.0
+    for name in topN:
+        # print(name)
+        number_i += 1.0
+        tmpname = name[14:]
+        tmpname1 = tmpname[tmpname.find("/") + 1:]
+        pre_label = tmpname1[:tmpname1.find("/")]
+        # print(pre_label)
+
+        if pre_label == true_label:
+            count_i += 1.0
+            s_AP += count_i / number_i
+    if count_i == 0:
+        return 0
+    return s_AP / count_i
+
+
+def search_result():
+    b_time = time.time()
     extract_query_frame()
     # set args
-
     args = parser.parse_args()
     args = autofill(args)
 
@@ -256,7 +289,6 @@ if __name__ == '__main__':
                                             num_workers=1,  # change this part accordingly
                                             pin_memory=True)
 
-    # main loop
     net.net.eval()
     avg_score = {}
     sum_batch_elapse = 0.
@@ -264,14 +296,56 @@ if __name__ == '__main__':
     duplication = 1
     softmax = torch.nn.Softmax(dim=1)
 
+    dict_name_label = get_name_label()
+    Video_list, feature_list = get_feature_dict()
+    all_feature = np.array(feature_list)
+
+    # load model data database
+    l_time = time.time()
     total_round = 1  # change this part accordingly if you do not want an inf loop
+
     for i_round in range(total_round):
+        list_Ap = []
         i_batch = 0
+        dict_q_r = {}
+        dict_AP = {}
         for data, target, video_subpath in eval_iter:
+
+            # print(video_subpath)
             batch_start_time = time.time()
             feature = net.get_feature(data)
-            feature = feature.detach().cpu().numpy()[0]
-            get_top_N(20, feature)
+            feature = feature.detach().cpu().numpy()
+            for i in range(len(video_subpath)):
+                V_feature = feature[i]
+                topN_re = get_top_N(Video_list, all_feature, args.topN, V_feature)
+                dict_q_r[video_subpath[i]] = topN_re
+                if video_subpath[i] in dict_name_label.keys():
+                    tmp_AP = cal_AP(topN_re, dict_name_label[video_subpath[i]])
+                else:
+                    print("video is not in the database, AP=0")
+                    tmp_AP = 0
+                dict_AP[video_subpath[i]] = tmp_AP
+                print(video_subpath[i], str(tmp_AP))
+                # print("              ")
+                # print("              ")
+                list_Ap.append(tmp_AP)
+        sum_AP = 0.0
+        for i in range(len(list_Ap)):
+            sum_AP = sum_AP + list_Ap[i]
+        MAP = sum_AP / len(list_Ap)
+        print("MAP:", MAP)
+        # json.dump(dict_q_r,open("q_r.json","w"))
+    e_time = time.time()
+    print("load_time:", l_time - b_time)
+    print("search_time:", e_time - l_time)
+    return dict_q_r, dict_AP
+
+
+if __name__ == '__main__':
+    search_result()
+
+
+
 
 
 

@@ -231,7 +231,8 @@ def creat(name, batch_size, num_workers=16, **kwargs):
         num_workers=num_workers, pin_memory=False)
 
     val_loader = torch.utils.data.DataLoader(val,
-        batch_size=2*torch.cuda.device_count(), shuffle=False,
+        # batch_size=2*torch.cuda.device_count(), shuffle=False,
+        batch_size=batch_size, shuffle=True,
         num_workers=num_workers, pin_memory=False)
 
     return (train_loader, val_loader)
