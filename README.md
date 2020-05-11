@@ -3,6 +3,7 @@
 陈震 1901213532, 韩愉 1901213533, 李一博 1901213538
 
 ## Pre-requisites
+- Linux
 - Python 3
 - PyTorch > 0.4.1
 - Numpy

@@ -23,13 +23,14 @@ from data import video_transforms as transforms
 from data.video_iterator import VideoIter
 from network.symbol_builder import get_symbol
 
-import torchvision.models as models
-from torchsummary import summary
+# import torchvision.models as models
+# from torchsummary import summary
 
 parser = argparse.ArgumentParser(description="PyTorch Video Recognition Parser (Evaluation)")
 # debug
 parser.add_argument('--debug-mode', type=bool, default=True,
                     help="print all setting for debugging.")
+
 # io
 parser.add_argument('--dataset', default='HMDB51', choices=['UCF101', 'Kinetics'],
                     help="path to dataset")
@@ -43,17 +44,15 @@ parser.add_argument('--model-dir', type=str, default="./",
                     help="set logging file.")
 parser.add_argument('--log-file', type=str, default="./eval-hmdb51.log",
                     help="set logging file.")
-parser.add_argument('--load-from-frames', action='store_true')
-
 # device
-parser.add_argument('--gpus', type=int, default=1,
+parser.add_argument('--gpus', type=int, default=0,
                     help="define gpu id")
 # algorithm
 parser.add_argument('--network', type=str, default='mfnet_3d',
                     choices=['mfnet_3d'],
                     help="chose the base network")
 # evaluation
-parser.add_argument('--load-epoch', type=int, default=60,
+parser.add_argument('--load-epoch', type=int, default=40,
                     help="resume trained model")
 parser.add_argument('--batch-size', type=int, default=1,
                     help="batch size")
@@ -223,9 +222,28 @@ def cal_AP(topN, true_label):
     return s_AP / count_i
 
 
-def search_result():
+def get_query(video_path):
+    import shutil
+    for root, dirs, files in os.walk("./query/", topdown=False):
+        for name in files:
+            os.remove(os.path.join(root, name))
+        for name in dirs:
+            os.rmdir(os.path.join(root, name))
+    os.makedirs("./query/data")
+    os.makedirs("./query/videos")
+    os.makedirs("./query/frames")
+    os.makedirs("./query/list_cvt")
+    if video_path.rfind("/") == -1:
+        new_file = video_path
+    else:
+        new_file = video_path[video_path.rfind("/"):]
+    shutil.copyfile(video_path, "./query/data/" + new_file)
+
+
+def search_result(video_path):
+    video_path = "./static/data/" + video_path
     b_time = time.time()
-    extract_query_frame()
+
     # set args
     args = parser.parse_args()
     args = autofill(args)
@@ -243,7 +261,7 @@ def search_result():
     # number_class=51
 
     # creat model
-    sym_net, input_config = get_symbol(name=args.network, **dataset_cfg)
+    sym_net, input_config = get_symbol(name=args.network, use_flow=False, **dataset_cfg)
 
     # network
     if torch.cuda.is_available():
@@ -257,7 +275,15 @@ def search_result():
                        criterion=criterion,
                        model_prefix=args.model_prefix)
     net.load_checkpoint(epoch=args.load_epoch)
+    m_time = time.time()
 
+    dict_name_label = get_name_label()
+    Video_list, feature_list = get_feature_dict()
+    all_feature = np.array(feature_list)
+    d_time = time.time()
+
+    get_query(video_path)
+    extract_query_frame()
     data_root = "./query/"
     query_names = os.listdir(data_root + "videos")
     txt_path = "./query/list_cvt/search.txt"
@@ -275,7 +301,6 @@ def search_result():
                            frame_prefix=os.path.join(data_root, 'frames'),
                            txt_list=os.path.join(data_root, 'list_cvt', 'search.txt'),
                            sampler=val_sampler,
-                           load_from_frames=args.load_from_frames,
                            force_color=True,
                            video_transform=transforms.Compose([
                                transforms.Resize((256, 256)),
@@ -286,6 +311,7 @@ def search_result():
                            name='test',
                            return_item_subpath=True
                            )
+
     eval_iter = torch.utils.data.DataLoader(val_loader,
                                             batch_size=args.batch_size,
                                             shuffle=True,
@@ -298,54 +324,53 @@ def search_result():
     sum_batch_inst = 0
     duplication = 1
     softmax = torch.nn.Softmax(dim=1)
+    pr_time = time.time()
+    # print("preprocessing video time:" ,pv_time-lm_time)
 
-    dict_name_label = get_name_label()
-    Video_list, feature_list = get_feature_dict()
-    all_feature = np.array(feature_list)
-
-    # load model data database
-    l_time = time.time()
     total_round = 1  # change this part accordingly if you do not want an inf loop
 
     for i_round in range(total_round):
         list_Ap = []
         i_batch = 0
         dict_q_r = {}
-        dict_AP = {}
+        # dict_AP={}
         for data, target, video_subpath in eval_iter:
 
             # print(video_subpath)
             batch_start_time = time.time()
             feature = net.get_feature(data)
             feature = feature.detach().cpu().numpy()
+
             for i in range(len(video_subpath)):
+                dict_info = {}
                 V_feature = feature[i]
                 topN_re = get_top_N(Video_list, all_feature, args.topN, V_feature)
-                dict_q_r[video_subpath[i]] = topN_re
+                dict_info["result"] = topN_re
                 if video_subpath[i] in dict_name_label.keys():
-                    tmp_AP = cal_AP(topN_re, dict_name_label[video_subpath[i]])
+                    tmp_AP10 = cal_AP(topN_re[:10], dict_name_label[video_subpath[i]])
+                    tmp_AP50 = cal_AP(topN_re[:50], dict_name_label[video_subpath[i]])
+                    tmp_AP200 = cal_AP(topN_re[:200], dict_name_label[video_subpath[i]])
                 else:
                     print("video is not in the database, AP=0")
-                    tmp_AP = 0
-                dict_AP[video_subpath[i]] = tmp_AP
-                print(video_subpath[i], str(tmp_AP))
-                # print("              ")
-                # print("              ")
-                list_Ap.append(tmp_AP)
-        sum_AP = 0.0
-        for i in range(len(list_Ap)):
-            sum_AP = sum_AP + list_Ap[i]
-        MAP = sum_AP / len(list_Ap)
-        print("MAP:", MAP)
-        # json.dump(dict_q_r,open("q_r.json","w"))
-    e_time = time.time()
-    print("load_time:", l_time - b_time)
-    print("search_time:", e_time - l_time)
-    return dict_q_r, dict_AP
+                    tmp_AP10 = 0
+                    tmp_AP50 = 0
+                    tmp_AP200 = 0
+                print(video_subpath[i], str(tmp_AP10), str(tmp_AP50), str(tmp_AP200))
+                list_Ap = [tmp_AP10, tmp_AP50, tmp_AP200]
+                dict_info["AP"] = list_Ap
+                dict_q_r[video_subpath[i]] = dict_info
+            batch_end_time = time.time()
+            dict_q_r[video_subpath[0]]["time"] = batch_end_time - batch_start_time + pr_time - d_time
+            dict_q_r[video_subpath[0]]["lmtime"] = m_time - b_time
+            dict_q_r[video_subpath[0]]["datatime"] = d_time - m_time
+            json.dump(dict_q_r, open("q_r.json", "w"))
+
+    return dict_q_r
 
 
 if __name__ == '__main__':
-    search_result()
+    result = search_result("wave/winKen_wave_u_cm_np1_ri_bad_1.avi")
+    print(result)
 
 
 

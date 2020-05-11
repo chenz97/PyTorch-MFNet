@@ -389,6 +389,13 @@ class model(static_model):
                 and ((i_epoch+1) % max(1, int(self.save_checkpoint_freq/2))) == 0:
                 logging.info("Start evaluating epoch {:d}:".format(i_epoch))
 
+                # correct = 0
+                # total = 0
+                # # per class
+                # class_correct = [0] * 51
+                # class_total = [0] * 51
+
+
                 metrics.reset()
                 self.net.eval()
                 sum_sample_elapse = 0.
@@ -402,6 +409,16 @@ class model(static_model):
 
                     outputs, losses = self.forward(data, target)
 
+                    # _, predicted = torch.max(outputs[0].data, 1)
+                    # predicted = predicted.cpu()
+                    # total += target.size(0)
+                    # correct += (predicted == target).sum().item()
+                    # correctness = (predicted == target).squeeze()
+                    # for i in range(target.size(0)):
+                    #     label = target[i]
+                    #     class_correct[label] += correctness[i].item()
+                    #     class_total[label] += 1
+
                     metrics.update([output.data.cpu() for output in outputs],
                                     target.cpu(),
                                    [loss.data.cpu() for loss in losses])
@@ -410,6 +427,9 @@ class model(static_model):
                     sum_sample_elapse += time.time() - batch_start_time
                     batch_start_time = time.time()
                     sum_sample_inst += target.shape[0]
+
+                # for i in range(51):
+                #     logging.info('accuracy of class {}: {}'.format(i, class_correct[i] / class_total[i]))
 
                 # evaluation callbacks
                 self.callback_kwargs['sample_elapse'] = sum_sample_elapse / sum_sample_inst
